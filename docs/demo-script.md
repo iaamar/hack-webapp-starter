@@ -9,10 +9,9 @@ identifies the target surface with confidence, applies the detected table
 dimensions, and adds real-world constraints: tabletop clearance and whether the
 plant will block the TV sightline.
 
-The assistant returns ranked Wayfair product matches by exact dimensions. The
-chat response shows fit confidence, product footprint, fit verdict, reasons, and
-Wayfair links. It also explains generated visual-fit reasoning so the shopper
-understands remaining table space and sightline risk.
+The assistant keeps this flow minimal: it returns only the best-fit product plus
+one newly generated composite preview image on top of the uploaded room photo.
+The generated image keeps confidence and size labels visible.
 
 The best match is compact enough for the 34 inch table and stays below the
 sightline limit. A larger monstera looks nice but is flagged as a poor fit
@@ -27,6 +26,8 @@ decision, reducing abandoned carts and returns caused by dimension uncertainty.�
 2. Upload or show the bundled room image.
 3. Keep the prompt: “Find me a plant that will fit on this table without
    blocking the TV.”
-4. Show the tool-backed ranked products with confidence and Wayfair links.
-5. (Optional) Open `http://localhost:3000/fitcheck-demo` for the standalone
+4. Ask: “Show only the best fit and generate the preview image.”
+5. Show the best-fit card and the single generated image output.
+6. Confirm that no extra explanatory text appears in the assistant response.
+7. (Optional) Open `http://localhost:3000/fitcheck-demo` for the standalone
    visual component.

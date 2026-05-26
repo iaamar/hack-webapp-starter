@@ -154,7 +154,7 @@ export const rankProductsForScene = (
         "Show the product footprint, remaining clearance, and sightline risk.",
       ].join(" "),
       status:
-        "Subconscious handles visual reasoning from the uploaded image; the demo renders the generated layout locally so it works without an image-generation endpoint.",
+        "Subconscious handles visual reasoning from the uploaded image; the chat UI renders a local composite best-fit preview so the flow works without an image-generation endpoint.",
     },
     visualReasoning,
   };

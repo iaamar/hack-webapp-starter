@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useMemo, useRef, useState } from "react";
+import { FitPreviewGallery } from "@/components/fit-preview-gallery";
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -20,34 +21,27 @@ interface FitDimensions {
   height: number;
 }
 
-interface RankedFitProduct {
+interface BestFitProduct {
   id: string;
   name: string;
   verdict: string;
   fitConfidence: number;
-  score: number;
   dimensions: FitDimensions;
   productUrl: string;
-  reasons: string[];
 }
 
 interface FindFittingProductsOutput {
-  query: string;
-  surfaceDetection: {
+  bestFit: BestFitProduct;
+  surface: {
     sceneId: string;
     surfaceName: string;
     confidence: number;
     confidenceLabel: string;
     dimensions: FitDimensions;
-    constraints: string[];
-    evidence: string[];
   };
-  rankedProducts: RankedFitProduct[];
-  generatedVisualFitReasoning: {
-    provider: string;
-    prompt: string;
-    status: string;
-    highlights: string[];
+  preview: {
+    mode: string;
+    variantCount: number;
   };
 }
 
@@ -59,22 +53,53 @@ function isFindFittingProductsOutput(
   value: unknown,
 ): value is FindFittingProductsOutput {
   if (!isRecord(value)) return false;
-  if (!isRecord(value.surfaceDetection)) return false;
-  if (!Array.isArray(value.rankedProducts)) return false;
+  if (!isRecord(value.surface)) return false;
+  if (!isRecord(value.bestFit)) return false;
+  if (!isRecord(value.preview)) return false;
   return (
-    typeof value.query === "string" &&
-    typeof value.surfaceDetection.surfaceName === "string"
+    typeof value.surface.surfaceName === "string" &&
+    typeof value.bestFit.name === "string"
   );
+}
+
+function getImageUrlFromMessage(message: UIMessage): string | null {
+  for (const part of message.parts) {
+    if (part.type === "file" && part.mediaType?.startsWith("image/")) {
+      return part.url;
+    }
+  }
+  return null;
+}
+
+function hasFitToolOutput(message: UIMessage): boolean {
+  for (const part of message.parts) {
+    if (!part.type.startsWith("tool-")) {
+      continue;
+    }
+    const label = part.type.replace("tool-", "");
+    const state = "state" in part ? part.state : "unknown";
+    if (
+      label === "findFittingProducts" &&
+      state === "output-available" &&
+      "output" in part &&
+      isFindFittingProductsOutput(part.output)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function MessagePart({
   part,
   messageId,
   index,
+  roomImageUrl,
 }: {
   part: UIMessage["parts"][number];
   messageId: string;
   index: number;
+  roomImageUrl?: string;
 }) {
   if (part.type === "text") {
     return (
@@ -104,66 +129,51 @@ function MessagePart({
       isFindFittingProductsOutput(part.output)
     ) {
       const fitcheck = part.output;
-      const confidencePercent = Math.round(fitcheck.surfaceDetection.confidence * 100);
-      const topProducts = fitcheck.rankedProducts.slice(0, 3);
+      const sourceImageUrl = roomImageUrl ?? "/test-room.svg";
 
       return (
         <div
           key={`${messageId}-tool-${index}`}
-          className="mt-2 space-y-3 rounded-xl border border-[#FF5C28]/30 bg-[rgb(255_92_40/0.12)] px-3 py-3"
+          className="mt-2 space-y-2 rounded-xl border border-[#FF5C28]/30 bg-[rgb(255_92_40/0.12)] px-3 py-3"
         >
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#FFB29C]">
-              Fitcheck tool result
-            </p>
-            <p className="mt-1 text-sm text-zinc-100">
-              Detected{" "}
-              <span className="font-semibold">{fitcheck.surfaceDetection.surfaceName}</span>{" "}
-              with {confidencePercent}% confidence.
-            </p>
-            <p className="mt-1 text-xs text-zinc-300">
-              Surface size: {fitcheck.surfaceDetection.dimensions.width} in x{" "}
-              {fitcheck.surfaceDetection.dimensions.depth} in x{" "}
-              {fitcheck.surfaceDetection.dimensions.height} in
-            </p>
+          <div className="flex items-center justify-between gap-3">
+            <span className="rounded-full bg-[#FF5C28] px-2.5 py-1 text-xs font-semibold text-black">
+              Best fit
+            </span>
+            <a
+              href={fitcheck.bestFit.productUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-medium text-zinc-100 underline decoration-zinc-500 underline-offset-2 hover:text-[#FFB29C]"
+            >
+              {fitcheck.bestFit.name}
+            </a>
           </div>
 
-          <div className="space-y-2">
-            {topProducts.map((product, productIndex) => (
-              <div
-                key={product.id}
-                className="rounded-lg border border-zinc-700/70 bg-black/30 px-3 py-2"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-zinc-100">
-                    {productIndex + 1}. {product.name}
-                  </p>
-                  <span className="rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-200">
-                    {product.fitConfidence}% confidence
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-zinc-400">
-                  {product.verdict} · {product.dimensions.width} in x{" "}
-                  {product.dimensions.depth} in x {product.dimensions.height} in
-                </p>
-                <a
-                  href={product.productUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-flex text-xs font-medium text-[#FFB29C] hover:text-[#ff7347]"
-                >
-                  View on Wayfair
-                </a>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-xs text-zinc-300">
-            {fitcheck.generatedVisualFitReasoning.highlights[0] ??
-              fitcheck.generatedVisualFitReasoning.status}
-          </p>
+          <FitPreviewGallery
+            roomImageUrl={sourceImageUrl}
+            surfaceName={fitcheck.surface.surfaceName}
+            surfaceDimensions={fitcheck.surface.dimensions}
+            surfaceConfidence={fitcheck.surface.confidence}
+            confidenceLabel={fitcheck.surface.confidenceLabel}
+            bestFit={fitcheck.bestFit}
+            previewMode={fitcheck.preview.mode}
+          />
         </div>
       );
+    }
+
+    if (label === "findFittingProducts" && state === "input-available") {
+      return (
+        <div
+          key={`${messageId}-tool-${index}`}
+          className="mt-2 h-56 w-full animate-pulse rounded-xl border border-zinc-700 bg-zinc-900/60"
+        />
+      );
+    }
+
+    if (label === "findFittingProducts") {
+      return null;
     }
 
     return (
@@ -201,6 +211,22 @@ export function ChatApp() {
   const { messages, sendMessage, status, error, stop } = useChat({ transport });
 
   const isBusy = status === "streaming" || status === "submitted";
+  const latestImageByMessageId = useMemo(() => {
+    const contextMap = new Map<string, string>();
+    let latestImage: string | null = null;
+
+    for (const message of messages) {
+      const imageUrl = getImageUrlFromMessage(message);
+      if (imageUrl) {
+        latestImage = imageUrl;
+      }
+      if (latestImage) {
+        contextMap.set(message.id, latestImage);
+      }
+    }
+
+    return contextMap;
+  }, [messages]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -264,10 +290,9 @@ export function ChatApp() {
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-6">
         <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-400">
           <p>
-            <span className="font-medium text-[#FF5C28]">Ask in chat</span> and the
-            assistant runs fitcheck tools: detects the surface, scores product fit
-            confidence, ranks Wayfair options, and generates visual-fit reasoning.
-            Attach a room image anytime.
+            <span className="font-medium text-[#FF5C28]">Ask in chat</span> for a fit
+            preview and the response shows only the best-fit product plus a generated
+            image.
           </p>
         </div>
 
@@ -279,47 +304,60 @@ export function ChatApp() {
               </p>
               <ul className="mt-4 max-w-md space-y-2 text-sm">
                 <li>“Find me a plant that fits on this table.”</li>
-                <li>“Use this image and rank options by fit confidence.”</li>
-                <li>
-                  “Which product leaves the most tabletop clearance and why?”
-                </li>
+                <li>“Use this image and show only the best fit.”</li>
+                <li>“Generate a fitted preview image.”</li>
                 <li>Attach a room image, then ask for recommendations.</li>
               </ul>
             </div>
           )}
 
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+          {messages.map((message) => {
+            const suppressAssistantText =
+              message.role === "assistant" && hasFitToolOutput(message);
+            const partsToRender = suppressAssistantText
+              ? message.parts.filter((part) => part.type !== "text")
+              : message.parts;
+
+            if (partsToRender.length === 0) {
+              return null;
+            }
+
+            return (
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                  message.role === "user"
-                    ? "bg-[#FF5C28] text-black"
-                    : "border border-zinc-800 bg-zinc-900 text-zinc-100"
-                }`}
+                key={message.id}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`mb-1 text-xs font-medium uppercase tracking-wide ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                     message.role === "user"
-                      ? "text-black/60"
-                      : "text-[#FF5C28]"
+                      ? "bg-[#FF5C28] text-black"
+                      : "border border-zinc-800 bg-zinc-900 text-zinc-100"
                   }`}
                 >
-                  {message.role}
+                  {!suppressAssistantText && (
+                    <div
+                      className={`mb-1 text-xs font-medium uppercase tracking-wide ${
+                        message.role === "user"
+                          ? "text-black/60"
+                          : "text-[#FF5C28]"
+                      }`}
+                    >
+                      {message.role}
+                    </div>
+                  )}
+                  {partsToRender.map((part, index) => (
+                    <MessagePart
+                      key={`${message.id}-${index}`}
+                      part={part}
+                      messageId={message.id}
+                      index={index}
+                      roomImageUrl={latestImageByMessageId.get(message.id)}
+                    />
+                  ))}
                 </div>
-                {message.parts.map((part, index) => (
-                  <MessagePart
-                    key={`${message.id}-${index}`}
-                    part={part}
-                    messageId={message.id}
-                    index={index}
-                  />
-                ))}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {isBusy && (
             <div className="flex items-center gap-2 text-sm text-zinc-400">

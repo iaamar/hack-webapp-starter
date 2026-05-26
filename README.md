@@ -3,12 +3,23 @@
 FitCheck is a Wayfair customer-track hack built on this Subconscious starter.
 The demo flow is now chatbot-first: upload a room image in chat, ask for a
 product like “find me a plant that will fit on this table,” and receive ranked
-Wayfair matches with fit confidence, links, and generated visual-fit reasoning.
+Wayfair matches with fit confidence and a generated best-fit preview image.
+For the fit-preview flow, chat output is intentionally minimal: a single winner
+plus one newly generated composite image at the same source resolution.
 
 The app uses `subconscious/tim-qwen3.6-27b` through `lib/subconscious.ts`.
 Subconscious handles the vision/reasoning story from a user-provided image; the
 demo keeps dimension-driven ranking and local visual-fit planning so results stay
 reliable without a separate image-generation endpoint.
+
+## Model Capability Check (`models.json`)
+
+- `origin/main` includes `models.json`, but it currently contains API error
+  payload entries rather than usable model capability records.
+- Runtime checks in `lib/model-capabilities.ts` inspect `models.json` when
+  present and determine whether image-editing models are available.
+- Because no working image-edit endpoint is configured, preview rendering mode is
+  explicitly labeled as `Local compositing fallback` in chat output.
 
 ## Demo Path
 
@@ -28,9 +39,8 @@ Open [http://localhost:3000](http://localhost:3000). The bundled test image is
    fits on this table.”
 2. FitCheck detects the table surface with confidence and applies clearance plus
    sightline constraints.
-3. Chat returns ranked products with fit confidence, dimensions, and Wayfair
-   links.
-4. Chat also explains generated visual-fit reasoning (clearance + line of sight).
+3. Chat returns only the best-fit product and one generated composite preview.
+4. Confidence and size labels stay visible on the generated image overlay.
 5. Optional: open `/fitcheck-demo` to show the standalone visualized layout.
 
 ---
@@ -113,6 +123,8 @@ Open [http://localhost:3000](http://localhost:3000).
 - Use **Image** to attach a room photo and ask a fit question.
 - The assistant calls fitcheck tools to return confidence, ranked products, and
   Wayfair links.
+- Ask: “Show only the best fit and generate the preview image.”
+- Chat returns the minimal payload/output for this flow: one best fit + one image.
 - Optional: open `/fitcheck-demo` for the standalone visual component.
 
 ---

@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { rankProductsForScene } from "@/lib/fitcheck-agent";
 import { roomScenes } from "@/lib/fitcheck-data";
+import { inspectModelsCatalog } from "@/lib/model-capabilities";
 
 /**
  * Example tools for the hackathon starter.
@@ -101,7 +102,7 @@ export const runLongTask = tool({
 
 export const findFittingProducts = tool({
   description:
-    "Detect the target room surface and rank Wayfair-style products by fit confidence, dimensions, and shopper constraints.",
+    "Detect the target room surface, rank products internally, and return a minimal best-fit payload for image preview rendering.",
   inputSchema: z.object({
     query: z
       .string()
@@ -117,34 +118,33 @@ export const findFittingProducts = tool({
     const scene =
       roomScenes.find((candidate) => candidate.id === sceneId) ?? roomScenes[0];
     const result = rankProductsForScene(scene, query);
+    const modelCapabilitySummary = await inspectModelsCatalog();
+    const bestFit = result.rankedProducts[0];
+
+    const visualPreviewMode = {
+      mode: modelCapabilitySummary.supportsImageEditing
+        ? "model-capable-local-composite"
+        : "local-composite",
+      variantCount: 1,
+    };
 
     return {
-      query,
-      surfaceDetection: {
+      bestFit: {
+        id: bestFit.product.id,
+        name: bestFit.product.name,
+        verdict: bestFit.verdict,
+        fitConfidence: bestFit.score,
+        dimensions: bestFit.product.dimensions,
+        productUrl: bestFit.product.productUrl,
+      },
+      surface: {
         sceneId: result.surfaceDetection.sceneId,
         surfaceName: result.surfaceDetection.surfaceName,
         confidence: result.surfaceDetection.confidence,
         confidenceLabel: result.surfaceDetection.confidenceLabel,
         dimensions: scene.surfaceDimensions,
-        constraints: scene.constraints,
-        evidence: result.surfaceDetection.evidence,
       },
-      rankedProducts: result.rankedProducts.map((productFit) => ({
-        id: productFit.product.id,
-        name: productFit.product.name,
-        verdict: productFit.verdict,
-        fitConfidence: productFit.score,
-        score: productFit.score,
-        dimensions: productFit.product.dimensions,
-        productUrl: productFit.product.productUrl,
-        reasons: productFit.reasons,
-      })),
-      generatedVisualFitReasoning: {
-        provider: result.visualPlan.provider,
-        prompt: result.visualPlan.prompt,
-        status: result.visualPlan.status,
-        highlights: result.visualReasoning,
-      },
+      preview: visualPreviewMode,
     };
   },
 });

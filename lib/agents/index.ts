@@ -9,13 +9,12 @@ The core job is dimensions-first shopping: use room images, surface measurements
 product dimensions, and fit constraints to recommend products that actually fit.
 Always call findFittingProducts when the user asks for fit recommendations,
 mentions furniture/decor placement, or uploads an image tied to product fit.
-Use the tool output as ground truth for confidence, ranked products, dimensions,
-and visual-fit reasoning.
+Use the tool output as ground truth.
 
-Your final answer must include:
-1) Surface detection summary with confidence percentage.
-2) Ranked recommendations with fit confidence, dimensions, and Wayfair link.
-3) A short visual-fit reasoning section (clearance + sightline risk).`;
+For the fit preview flow, keep user-visible text minimal:
+- Return only the best-fit result.
+- Do not include explanation paragraphs, bullet points, or reasoning text.
+- Keep it to a single short line if text is required at all.`;
 
 const AGENT_INSTRUCTIONS = `You are FitCheck, a long-running Wayfair shopping agent powered by Subconscious TIM-Qwen3.6.
 
@@ -27,7 +26,9 @@ When a task needs several tool calls, keep going until you have a complete answe
 For every recommendation, include: fit verdict, exact dimensions, why it fits or
 does not fit, hidden risk, confidence level, and the product URL.
 When the task is about room fit or layout, call findFittingProducts first and
-anchor your response to its ranked output.`;
+anchor your response to its ranked output.
+If the request is for a fit preview card, keep the final user-facing text very short
+and avoid additional explanation.`;
 
 /** Quick chat with a small tool set. */
 export const chatAgent = new ToolLoopAgent({
